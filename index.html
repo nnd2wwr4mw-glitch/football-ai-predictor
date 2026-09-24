@@ -1,5 +1,277 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Football AI Predictor V6</title><link rel="stylesheet" href="/style.css"></head><body>
-<header><div class="brand">⚽ <b>Football AI</b><span>V6</span></div><nav><button onclick="tab('predict')">Predictor</button><button onclick="tab('dashboard')">Dashboard</button></nav></header>
-<main><section id="predict"><div class="hero"><small>CUSTOM FOOTBALL MODEL</small><h1>Find the signal inside the numbers.</h1><p>Live fixtures, weighted form, team strength, injuries and a transparent probability engine.</p></div>
-<div class="bar"><div><label>Date</label><input id="date" type="date"></div><button onclick="load()">LOAD FIXTURES</button></div><section id="matches" class="matches"></section><section id="detail" class="hidden"></section></section>
-<section id="dashboard" class="hidden"><div class="hero"><small>MODEL MONITOR</small><h1>Your prediction dashboard.</h1><p>Track model quality locally and see what the engine is learning from each prediction.</p></div><div id="dash" class="dashboard"></div></section></main><footer>V6 • Transparent statistical estimates, not guarantees.</footer><script src="/app.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Football AI – Predictor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f1a;
+      --card: #121826;
+      --card-hover: #1a2332;
+      --border: #1e293b;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --blue: #3b82f6;
+      --blue-hover: #2563eb;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    header {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(11, 15, 26, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; }
+    .logo span { background: var(--blue); color: white; font-size: 0.7rem; padding: 2px 7px; border-radius: 999px; font-weight: 600; }
+    .nav-btns { display: flex; gap: 8px; }
+    .nav-btn {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+      padding: 7px 14px; border-radius: 999px; font-size: 0.85rem; font-weight: 500; cursor: pointer;
+    }
+    .nav-btn.active, .nav-btn:hover { background: var(--blue); border-color: var(--blue); color: white; }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 16px 80px; }
+    .hero { margin-bottom: 36px; }
+    .hero .label { color: var(--blue); font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 10px; }
+    .hero h1 { font-size: 2.1rem; font-weight: 800; line-height: 1.2; margin-bottom: 12px; }
+    .hero p { color: var(--muted); font-size: 1rem; max-width: 480px; }
+    .date-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 28px; }
+    .date-card label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; }
+    .date-input { width: 100%; background: #0f172a; border: 1px solid var(--border); color: var(--text); padding: 14px 16px; border-radius: 12px; font-size: 1rem; margin-bottom: 14px; }
+    .btn-primary { width: 100%; background: var(--blue); color: white; border: none; padding: 14px; border-radius: 12px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+    .btn-primary:hover { background: var(--blue-hover); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .fixture-list { display: flex; flex-direction: column; gap: 12px; }
+    .fixture-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; cursor: pointer; transition: all 0.2s; }
+    .fixture-card:hover { background: var(--card-hover); border-color: #334155; transform: translateY(-1px); }
+    .league-row { font-size: 0.78rem; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
+    .teams-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .team { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+    .team.away { justify-content: flex-end; text-align: right; }
+    .team img { width: 32px; height: 32px; object-fit: contain; border-radius: 50%; background: #1e293b; }
+    .team-name { font-weight: 600; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vs { font-weight: 700; color: var(--muted); font-size: 0.85rem; flex-shrink: 0; }
+    .time-row { margin-top: 10px; font-size: 0.8rem; color: var(--muted); }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: none; align-items: flex-end; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--bg); width: 100%; max-width: 560px; max-height: 92vh; border-radius: 20px 20px 0 0; overflow-y: auto; padding: 24px 20px 40px; animation: slideUp 0.3s ease; }
+    @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+    .modal-close { background: var(--card); border: 1px solid var(--border); color: var(--text); width: 36px; height: 36px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; }
+    .match-teams { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+    .match-team { flex: 1; text-align: center; }
+    .match-team img { width: 56px; height: 56px; object-fit: contain; margin-bottom: 8px; }
+    .match-team .name { font-weight: 700; font-size: 1rem; }
+    .match-vs { font-weight: 800; color: var(--muted); font-size: 1.1rem; }
+    .prob-section { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 20px; }
+    .prob-title { font-size: 0.85rem; color: var(--muted); margin-bottom: 16px; font-weight: 500; }
+    .prob-bars { display: flex; flex-direction: column; gap: 12px; }
+    .prob-row { display: flex; align-items: center; gap: 12px; }
+    .prob-label { width: 48px; font-size: 0.85rem; font-weight: 600; }
+    .prob-track { flex: 1; height: 10px; background: #0f172a; border-radius: 999px; overflow: hidden; }
+    .prob-fill { height: 100%; border-radius: 999px; transition: width 0.6s ease; }
+    .prob-fill.home { background: var(--blue); }
+    .prob-fill.draw { background: var(--yellow); }
+    .prob-fill.away { background: var(--green); }
+    .prob-pct { width: 42px; text-align: right; font-weight: 700; font-size: 0.9rem; }
+    .confidence { margin-top: 16px; font-size: 0.85rem; color: var(--muted); text-align: center; }
+    .confidence strong { color: var(--text); }
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+    .stat-card h4 { font-size: 0.75rem; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.03em; }
+    .stat-value { font-size: 1.25rem; font-weight: 700; }
+    .loading, .empty { text-align: center; padding: 48px 20px; color: var(--muted); }
+    .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-box { background: #450a0a; border: 1px solid #7f1d1d; color: #fca5a5; padding: 14px 16px; border-radius: 12px; margin-bottom: 20px; font-size: 0.9rem; }
+    .why-box { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; font-size: 0.9rem; color: var(--muted); line-height: 1.6; }
+    .why-box strong { color: var(--text); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">⚽ Football AI <span>v6</span></div>
+    <div class="nav-btns">
+      <button class="nav-btn active">Predictor</button>
+      <button class="nav-btn">Dashboard</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="label">Custom Football Model</div>
+      <h1>Find the signal inside the numbers.</h1>
+      <p>Live fixtures, weighted form, team strength, injuries and a transparent probability engine.</p>
+    </div>
+
+    <div class="date-card">
+      <label>Date</label>
+      <input type="date" id="dateInput" class="date-input" />
+      <button class="btn-primary" id="loadBtn">LOAD FIXTURES</button>
+    </div>
+
+    <div id="errorBox" class="error-box" style="display:none;"></div>
+    <div id="fixtureList" class="fixture-list"></div>
+  </main>
+
+  <div class="modal-overlay" id="modal">
+    <div class="modal" id="modalContent"></div>
+  </div>
+
+  <script>
+    const dateInput = document.getElementById('dateInput');
+    const loadBtn = document.getElementById('loadBtn');
+    const fixtureList = document.getElementById('fixtureList');
+    const errorBox = document.getElementById('errorBox');
+    const modal = document.getElementById('modal');
+    const modalContent = document.getElementById('modalContent');
+
+    const today = new Date().toISOString().slice(0, 10);
+    dateInput.value = today;
+
+    loadBtn.addEventListener('click', loadFixtures);
+    dateInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadFixtures(); });
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+    async function loadFixtures() {
+      const date = dateInput.value;
+      if (!date) return;
+      errorBox.style.display = 'none';
+      fixtureList.innerHTML = `<div class="loading"><div class="spinner"></div>Loading fixtures…</div>`;
+      loadBtn.disabled = true;
+
+      try {
+        const res = await fetch(`/api/fixtures?date=${date}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load fixtures');
+        if (!data.length) {
+          fixtureList.innerHTML = `<div class="empty">No fixtures found for this date.</div>`;
+          return;
+        }
+        data.sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date));
+        fixtureList.innerHTML = data.map(f => renderFixtureCard(f)).join('');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.style.display = 'block';
+        fixtureList.innerHTML = '';
+      } finally {
+        loadBtn.disabled = false;
+      }
+    }
+
+    function renderFixtureCard(f) {
+      const time = new Date(f.fixture.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const league = `${f.league.country} · ${f.league.name}`;
+      return `
+        <div class="fixture-card" onclick="openMatch(${f.fixture.id})">
+          <div class="league-row">
+            <span>${league}</span>
+            <span>${time}</span>
+          </div>
+          <div class="teams-row">
+            <div class="team">
+              <img src="${f.teams.home.logo}" alt="" onerror="this.style.display='none'">
+              <span class="team-name">${f.teams.home.name}</span>
+            </div>
+            <div class="vs">VS</div>
+            <div class="team away">
+              <span class="team-name">${f.teams.away.name}</span>
+              <img src="${f.teams.away.logo}" alt="" onerror="this.style.display='none'">
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function openMatch(id) {
+      modal.classList.add('open');
+      modalContent.innerHTML = `<div class="loading"><div class="spinner"></div>Analyzing match…</div>`;
+      try {
+        const res = await fetch(`/api/match/${id}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Analysis failed');
+        modalContent.innerHTML = renderMatchDetail(data);
+      } catch (err) {
+        modalContent.innerHTML = `
+          <div class="modal-header"><div></div>
+          <button class="modal-close" onclick="closeModal()">×</button></div>
+          <div class="error-box">${err.message}</div>`;
+      }
+    }
+
+    function renderMatchDetail(data) {
+      const { fixture, prediction: p } = data;
+      return `
+        <div class="modal-header">
+          <div>
+            <div style="font-size:0.8rem;color:var(--muted);margin-bottom:4px;">${fixture.league.country} · ${fixture.league.name}</div>
+            <div style="font-size:0.85rem;color:var(--muted);">${new Date(fixture.fixture.date).toLocaleString()}</div>
+          </div>
+          <button class="modal-close" onclick="closeModal()">×</button>
+        </div>
+        <div class="match-teams">
+          <div class="match-team">
+            <img src="${fixture.teams.home.logo}" alt="">
+            <div class="name">${fixture.teams.home.name}</div>
+          </div>
+          <div class="match-vs">VS</div>
+          <div class="match-team">
+            <img src="${fixture.teams.away.logo}" alt="">
+            <div class="name">${fixture.teams.away.name}</div>
+          </div>
+        </div>
+        <div class="prob-section">
+          <div class="prob-title">AI Probability Engine</div>
+          <div class="prob-bars">
+            <div class="prob-row">
+              <div class="prob-label" style="color:var(--blue)">Home</div>
+              <div class="prob-track"><div class="prob-fill home" style="width:${p.home}%"></div></div>
+              <div class="prob-pct">${p.home}%</div>
+            </div>
+            <div class="prob-row">
+              <div class="prob-label" style="color:var(--yellow)">Draw</div>
+              <div class="prob-track"><div class="prob-fill draw" style="width:${p.draw}%"></div></div>
+              <div class="prob-pct">${p.draw}%</div>
+            </div>
+            <div class="prob-row">
+              <div class="prob-label" style="color:var(--green)">Away</div>
+              <div class="prob-track"><div class="prob-fill away" style="width:${p.away}%"></div></div>
+              <div class="prob-pct">${p.away}%</div>
+            </div>
+          </div>
+          <div class="confidence">
+            Predicted: <strong>${p.predicted === 'Home' ? fixture.teams.home.name : p.predicted === 'Away' ? fixture.teams.away.name : 'Draw'}</strong>
+            · Confidence <strong>${p.confidence}%</strong>
+          </div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card"><h4>Home Form (pts/game)</h4><div class="stat-value">${p.form.home.avgPoints.toFixed(2)}</div></div>
+          <div class="stat-card"><h4>Away Form (pts/game)</h4><div class="stat-value">${p.form.away.avgPoints.toFixed(2)}</div></div>
+          <div class="stat-card"><h4>H2H Matches</h4><div class="stat-value">${p.h2hSummary.played}</div></div>
+          <div class="stat-card"><h4>Injuries</h4><div class="stat-value">${p.injuries.home} – ${p.injuries.away}</div></div>
+        </div>
+        <div class="why-box">
+          <strong>Why this prediction?</strong><br>
+          Weighted recent form, home advantage, goal difference, head-to-head and injury impact are combined into a transparent probability model.
+        </div>
+      `;
+    }
+
+    function closeModal() { modal.classList.remove('open'); }
+    loadFixtures();
+  </script>
+</body>
+</html>

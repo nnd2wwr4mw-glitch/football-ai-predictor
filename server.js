@@ -14,7 +14,7 @@ const API_KEY = process.env.API_FOOTBALL_KEY;
 const API_BASE = "https://v3.football.api-sports.io";
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static("."));
 
 // Health check
 app.get("/api/health", (req, res) => {

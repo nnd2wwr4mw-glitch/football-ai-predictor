@@ -200,7 +200,7 @@
       modal.classList.add('open');
       modalContent.innerHTML = `<div class="loading"><div class="spinner"></div>Analyzing match…</div>`;
       try {
-        const res = await fetch(`https://football-ai-predictor-production-9625.up.railway.app/api/match/${id}`);
+        const res = await fetch(`/api/match/${id}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Analysis failed');
         modalContent.innerHTML = renderMatchDetail(data);

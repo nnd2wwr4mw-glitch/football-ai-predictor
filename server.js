@@ -148,7 +148,6 @@ app.get("/api/match/:id", async (req, res) => {
   }
 });
 
-// ========== PREDICTION ENGINE ==========
 function calculatePrediction({ fixture, homeStats, awayStats, homeLast, awayLast, h2h, homeInjuries, awayInjuries }) {
   function getFormPoints(matches, teamId) {
     let points = 0;
@@ -172,8 +171,8 @@ function calculatePrediction({ fixture, homeStats, awayStats, homeLast, awayLast
 
     return {
       points,
-      played: played || 1,
-      avgPoints: points / (played || 1),
+      played: played || 0,
+      avgPoints: played ? points / played : 1.0,   // default to average if no data
       gf,
       ga,
       gd: gf - ga
@@ -183,6 +182,7 @@ function calculatePrediction({ fixture, homeStats, awayStats, homeLast, awayLast
   const homeForm = getFormPoints(homeLast, fixture.teams.home.id);
   const awayForm = getFormPoints(awayLast, fixture.teams.away.id);
 
+  // H2H
   let h2hHome = 0, h2hAway = 0, h2hDraw = 0, h2hPlayed = 0;
   (h2h || []).forEach((m) => {
     if (!m.goals || m.goals.home === null) return;
@@ -198,35 +198,44 @@ function calculatePrediction({ fixture, homeStats, awayStats, homeLast, awayLast
     }
   });
 
+  // Injury penalty
   const homeInjuryPenalty = Math.min((homeInjuries || []).length * 0.015, 0.08);
   const awayInjuryPenalty = Math.min((awayInjuries || []).length * 0.015, 0.08);
 
-  let homeStrength = homeForm.avgPoints * 1.15 + (homeForm.gd / 10) * 0.3;
-  let awayStrength = awayForm.avgPoints * 0.95 + (awayForm.gd / 10) * 0.3;
+  // Base strength (now has a floor so it never goes to zero)
+  let homeStrength = (homeForm.avgPoints * 1.15) + (homeForm.gd / 12) * 0.25 + 0.35;
+  let awayStrength = (awayForm.avgPoints * 0.95) + (awayForm.gd / 12) * 0.25 + 0.25;
 
+  // Add H2H influence if available
   if (h2hPlayed > 0) {
-    homeStrength += (h2hHome / h2hPlayed) * 0.4;
-    awayStrength += (h2hAway / h2hPlayed) * 0.4;
+    homeStrength += (h2hHome / h2hPlayed) * 0.35;
+    awayStrength += (h2hAway / h2hPlayed) * 0.35;
   }
 
-  homeStrength = Math.max(0.2, homeStrength - homeInjuryPenalty);
-  awayStrength = Math.max(0.2, awayStrength - awayInjuryPenalty);
+  homeStrength = Math.max(0.25, homeStrength - homeInjuryPenalty);
+  awayStrength = Math.max(0.25, awayStrength - awayInjuryPenalty);
 
-  const total = homeStrength + awayStrength + 0.85;
+  // Draw base
+  const drawBase = 0.75;
+  const total = homeStrength + awayStrength + drawBase;
+
   let homeProb = homeStrength / total;
   let awayProb = awayStrength / total;
-  let drawProb = 0.85 / total;
+  let drawProb = drawBase / total;
 
+  // Normalize
   const sum = homeProb + drawProb + awayProb;
   homeProb = +(homeProb / sum).toFixed(3);
   drawProb = +(drawProb / sum).toFixed(3);
   awayProb = +(awayProb / sum).toFixed(3);
 
-  let confidence = 55;
-  if (homeForm.played >= 5 && awayForm.played >= 5) confidence += 15;
+  // Confidence
+  let confidence = 50;
+  if (homeForm.played >= 5 && awayForm.played >= 5) confidence += 20;
+  else if (homeForm.played >= 3 || awayForm.played >= 3) confidence += 10;
   if (h2hPlayed >= 3) confidence += 10;
   if ((homeInjuries || []).length + (awayInjuries || []).length < 4) confidence += 5;
-  confidence = Math.min(92, confidence);
+  confidence = Math.min(90, confidence);
 
   let predicted = "Draw";
   if (homeProb > drawProb && homeProb > awayProb) predicted = "Home";
@@ -253,8 +262,7 @@ function calculatePrediction({ fixture, homeStats, awayStats, homeLast, awayLast
       away: (awayInjuries || []).length
     }
   };
-}
-
+} 
 // Start server
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Football AI Predictor running on port ${PORT}`);

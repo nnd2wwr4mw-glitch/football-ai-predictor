@@ -21,7 +21,7 @@ app.get("/api/health", (req, res) => {
   res.json({
     status: "online",
     apiConfigured: !!API_KEY,
-    version: "6.1"
+    version: "7.1"
   });
 });
 

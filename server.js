@@ -267,3 +267,4 @@ function calculatePrediction({ fixture, homeStats, awayStats, homeLast, awayLast
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Football AI Predictor running on port ${PORT}`);
 });
+

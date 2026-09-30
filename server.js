@@ -116,19 +116,128 @@ app.get("/api/match/:id", async (req, res) => {
     const h2h = results[4];
     const homeInjuries = results[5];
     const awayInjuries = results[6];
+const prediction = calculatePrediction({
+  fixture,
+  homeStats,
+  awayStats,
+  homeLast,
+  awayLast,
+  h2h,
+  homeInjuries,
+  awayInjuries
+});
 
-    const prediction = calculatePrediction({
-      fixture,
-      homeStats,
-      awayStats,
-      homeLast,
-      awayLast,
-      h2h,
-      homeInjuries,
-      awayInjuries
-    });
+const transformedPrediction = {
+  H: prediction.home,
+  D: prediction.draw,
+  A: prediction.away,
+  winner: prediction.predicted,
+  conf: prediction.confidence / 100,
+  lh: 0,
+  la: 0,
+  score: "0 - 0",
+  O: 0.45,
+  B: 0.55,
+  hf: prediction.form.home,
+  af: prediction.form.away,
+  hi: prediction.injuries.home,
+  ai: prediction.injuries.away
+};
 
-    res.json({
+try {
+  const hs = homeStats?.[0] || {};
+  const as = awayStats?.[0] || {};
+
+  const hg = +(hs.goals?.for?.average?.home ||
+    hs.goals?.for?.average?.total || 1.35);
+
+  const ag = +(as.goals?.for?.average?.away ||
+    as.goals?.for?.average?.total || 1.1);
+
+  const hc = +(hs.goals?.against?.average?.home ||
+    hs.goals?.against?.average?.total || 1);
+
+  const ac = +(as.goals?.against?.average?.away ||
+    as.goals?.against?.average?.total || 1.2);
+
+  const hi = (homeInjuries || []).length;
+  const ai = (awayInjuries || []).length;
+
+  transformedPrediction.lh = Math.max(
+    0.15,
+    (hg + ac) / 2 + 0.15 - Math.max(0, hi - ai) * 0.02
+  );
+
+  transformedPrediction.la = Math.max(
+    0.15,
+    (ag + hc) / 2 - Math.max(0, ai - hi) * 0.02
+  );
+
+  let H = 0;
+  let D = 0;
+  let A = 0;
+  let O = 0;
+  let B = 0;
+  let bestP = 0;
+  let bestH = 0;
+  let bestA = 0;
+
+  function fact(n) {
+    let r = 1;
+    for (let i = 2; i <= n; i++) r *= i;
+    return r;
+  }
+
+  function poi(k, lambda) {
+    return Math.exp(-lambda) * Math.pow(lambda, k) / fact(k);
+  }
+
+  for (let h = 0; h <= 8; h++) {
+    for (let a = 0; a <= 8; a++) {
+      const p =
+        poi(h, transformedPrediction.lh) *
+        poi(a, transformedPrediction.la);
+
+      if (h > a) H += p;
+      else if (h === a) D += p;
+      else A += p;
+
+      if (h + a >= 3) O += p;
+      if (h > 0 && a > 0) B += p;
+
+      if (p > bestP) {
+        bestP = p;
+        bestH = h;
+        bestA = a;
+      }
+    }
+  }
+
+  const total = H + D + A;
+
+  transformedPrediction.H = H / total;
+  transformedPrediction.D = D / total;
+  transformedPrediction.A = A / total;
+  transformedPrediction.O = O / total;
+  transformedPrediction.B = B / total;
+  transformedPrediction.score = `${bestH} - ${bestA}`;
+
+} catch (e) {
+  console.error("Prediction calculation error:", e);
+}
+
+res.json({
+  fixture,
+  homeStats,
+  awayStats,
+  homeLast,
+  awayLast,
+  h2h,
+  homeInjuries,
+  awayInjuries,
+  prediction: transformedPrediction
+});
+  
       fixture,
       homeStats,
       awayStats,
